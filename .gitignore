@@ -1,0 +1,7 @@
+env/
+waste_env/
+model/
+__pycache__/
+*.pyc
+*.keras
+*.hdf5
