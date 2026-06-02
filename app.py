@@ -6,8 +6,9 @@ from tensorflow.keras.preprocessing import image
 
 app = Flask(__name__)
 
-# Load model
-model = tf.keras.models.load_model("model/my_model.keras")
+# Safe model path
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "model", "my_model.keras")
+model = tf.keras.models.load_model(MODEL_PATH)
 
 class_names = ["plastic", "paper", "glass", "metal"]
 
@@ -25,12 +26,18 @@ def index():
 
     if request.method == "POST":
         file = request.files["image"]
-        path = os.path.join("static", file.filename)
+
+        upload_folder = os.path.join("static")
+        os.makedirs(upload_folder, exist_ok=True)
+
+        path = os.path.join(upload_folder, file.filename)
         file.save(path)
 
         result = predict(path)
 
     return render_template("index.html", result=result)
 
+# IMPORTANT FOR RENDER
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
