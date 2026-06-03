@@ -1,61 +1,29 @@
-from flask import Flask, render_template, request
+import gradio as gr
 import tensorflow as tf
-from tensorflow.keras.preprocessing import image
 import numpy as np
-import os
+from PIL import Image
 
-app = Flask(__name__)
+# Load your .keras model
+model = tf.keras.models.load_model("my-model.keras")
 
-MODEL_PATH = "model/my_model.keras"
+# CHANGE this according to your dataset classes
+classes = ["Organic", "Recyclable", "Non-Recyclable"]
 
-# Class names
-class_names = ["plastic", "paper", "glass", "metal"]
+def predict_image(img):
+    img = img.resize((224, 224))  # must match training size
+    img = np.array(img) / 255.0
+    img = np.expand_dims(img, axis=0)
 
-# Lazy-loaded model
-model = None
+    prediction = model.predict(img)
+    class_index = np.argmax(prediction)
 
-def get_model():
-    global model
-    if model is None:
-        model = tf.keras.models.load_model(MODEL_PATH)
-    return model
+    return classes[class_index]
 
-def predict(img_path):
-    model = get_model()
+demo = gr.Interface(
+    fn=predict_image,
+    inputs=gr.Image(type="pil"),
+    outputs="text",
+    title="Waste Classification Model"
+)
 
-    img = image.load_img(img_path, target_size=(224, 224))
-    img_array = image.img_to_array(img)
-    img_array = np.expand_dims(img_array, axis=0)
-    img_array = img_array / 255.0
-
-    prediction = model.predict(img_array, verbose=0)
-    predicted_class = class_names[np.argmax(prediction)]
-
-    return predicted_class
-
-@app.route("/", methods=["GET", "POST"])
-def index():
-    result = None
-
-    if request.method == "POST":
-        if "image" not in request.files:
-            return render_template("index.html", result="No file uploaded")
-
-        file = request.files["image"]
-
-        if file.filename == "":
-            return render_template("index.html", result="No file selected")
-
-        upload_folder = "static"
-        os.makedirs(upload_folder, exist_ok=True)
-
-        file_path = os.path.join(upload_folder, file.filename)
-        file.save(file_path)
-
-        result = predict(file_path)
-
-    return render_template("index.html", result=result)
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+demo.launch()
