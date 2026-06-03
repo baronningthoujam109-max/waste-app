@@ -1,43 +1,61 @@
-import os
-import numpy as np
+from flask import Flask, render_template, request
 import tensorflow as tf
-from flask import Flask, request, render_template
 from tensorflow.keras.preprocessing import image
+import numpy as np
+import os
 
 app = Flask(__name__)
 
-# Safe model path
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "model", "my_model.keras")
-model = tf.keras.models.load_model(MODEL_PATH)
+MODEL_PATH = "model/my_model.keras"
 
+# Class names
 class_names = ["plastic", "paper", "glass", "metal"]
 
-def predict(img_path):
-    img = image.load_img(img_path, target_size=(244, 244))
-    img_array = image.img_to_array(img)
-    img_array = np.expand_dims(img_array, axis=0) / 255.0
+# Lazy-loaded model
+model = None
 
-    prediction = model.predict(img_array)
-    return class_names[np.argmax(prediction)]
+def get_model():
+    global model
+    if model is None:
+        model = tf.keras.models.load_model(MODEL_PATH)
+    return model
+
+def predict(img_path):
+    model = get_model()
+
+    img = image.load_img(img_path, target_size=(224, 224))
+    img_array = image.img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0)
+    img_array = img_array / 255.0
+
+    prediction = model.predict(img_array, verbose=0)
+    predicted_class = class_names[np.argmax(prediction)]
+
+    return predicted_class
 
 @app.route("/", methods=["GET", "POST"])
 def index():
     result = None
 
     if request.method == "POST":
+        if "image" not in request.files:
+            return render_template("index.html", result="No file uploaded")
+
         file = request.files["image"]
 
-        upload_folder = os.path.join("static")
+        if file.filename == "":
+            return render_template("index.html", result="No file selected")
+
+        upload_folder = "static"
         os.makedirs(upload_folder, exist_ok=True)
 
-        path = os.path.join(upload_folder, file.filename)
-        file.save(path)
+        file_path = os.path.join(upload_folder, file.filename)
+        file.save(file_path)
 
-        result = predict(path)
+        result = predict(file_path)
 
     return render_template("index.html", result=result)
 
-# IMPORTANT FOR RENDER
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port)
